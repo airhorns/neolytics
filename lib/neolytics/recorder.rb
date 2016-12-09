@@ -34,28 +34,6 @@ module Neolytics
             nil
           end
         end
-
-        @neo4apis_session.instance_variable_get('@buffer').flush
-        query = <<QUERY
-MATCH (tp:TracePoint)
-WHERE NOT(tp.path IS NULL) AND NOT(tp.path = '(eval)' OR tp.path = '(irb)')
-RETURN DISTINCT tp.path AS path
-QUERY
-        file_paths = @neo4j_session.query(query).map(&:path)
-        file_paths.each(&method(:record_ast))
-
-        link_query = <<QUERY
-MATCH (tp:TracePoint)
-WITH tp, tp.lineno AS lineno, tp.path AS path, tp.method_id AS method_id
-MATCH (node:ASTNode {type: 'def'})
-USING INDEX node:ASTNode(name)
-WHERE
-  node.name = method_id AND
-  node.file_path = path AND
-  node.first_line = lineno
-MERGE (tp)-[:HAS_AST_NODE]->(node)
-QUERY
-        @neo4j_session.query(link_query)
       end
     end
 
@@ -130,7 +108,7 @@ QUERY
                               last_tracepoint_node,
                               ancestor_stack.last,
                               associated_call
-          
+
           if [:call, :c_call].include?(tp.event)
             ancestor_stack.push(last_tracepoint_node)
           end
